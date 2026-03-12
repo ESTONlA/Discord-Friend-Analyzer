@@ -1,1 +1,464 @@
+/* Discord Social Analyzer UI by Estonia */
 
+(() => {
+    const WINDOW_ID = "discordSocialAnalyzerWindow";
+    const STYLE_ID = "discordSocialAnalyzerStyle";
+
+    document.getElementById(WINDOW_ID)?.remove();
+    document.getElementById(STYLE_ID)?.remove();
+
+    function getModule(filter) {
+        let wpRequire;
+
+        webpackChunkdiscord_app.push([
+            [Symbol("dsa")],
+            {},
+            (req) => { wpRequire = req; }
+        ]);
+
+        if (!wpRequire?.c) return null;
+
+        for (const id in wpRequire.c) {
+            const exp = wpRequire.c[id]?.exports;
+            if (!exp) continue;
+
+            const candidates = [
+                exp,
+                exp.default,
+                exp.Z,
+                exp.ZP
+            ];
+
+            for (const candidate of candidates) {
+                try {
+                    if (candidate && filter(candidate)) {
+                        return candidate;
+                    }
+                } catch {}
+            }
+        }
+
+        return null;
+    }
+
+    const RelationshipStore = getModule(m => typeof m.getRelationships === "function");
+    const UserStore = getModule(m => typeof m.getCurrentUser === "function");
+
+    function getCurrentUsername() {
+        try {
+            const user = UserStore?.getCurrentUser?.();
+            return user?.globalName || user?.username || "Unknown User";
+        } catch {
+            return "Unknown User";
+        }
+    }
+
+    function getRelationshipBreakdown() {
+        try {
+            const relationships = RelationshipStore?.getRelationships?.();
+            if (!relationships || typeof relationships !== "object") return null;
+
+            const values = Object.values(relationships);
+
+            return {
+                friends: values.filter(v => v === 1).length,
+                blocked: values.filter(v => v === 2).length,
+                incoming: values.filter(v => v === 3).length,
+                outgoing: values.filter(v => v === 4).length
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    function getSocialRank(friendCount) {
+        if (friendCount == null) return "Unknown Specimen";
+        if (friendCount === 0) return "Digital Ghost";
+        if (friendCount <= 3) return "Cave Dweller";
+        if (friendCount <= 10) return "Side Quest NPC";
+        if (friendCount <= 25) return "Recognized Civilian";
+        if (friendCount <= 50) return "Social Operative";
+        if (friendCount <= 100) return "Discord Diplomat";
+        if (friendCount <= 200) return "Chronically Connected";
+        return "Notification Warlord";
+    }
+
+    function getTouchGrassMeter(friendCount) {
+        if (friendCount == null) return "Signal lost. Grass satellite offline.";
+        if (friendCount === 0) return "100% grass. You are basically a forest cryptid.";
+        if (friendCount <= 5) return "82% grass. Still legally outdoors.";
+        if (friendCount <= 15) return "64% grass. Mildly online.";
+        if (friendCount <= 30) return "46% grass. You live near the router now.";
+        if (friendCount <= 60) return "27% grass. Sunlight is becoming folklore.";
+        if (friendCount <= 100) return "12% grass. Vitamin D bankruptcy.";
+        return "3% grass. Your soul is a push notification.";
+    }
+
+    const niceMessages = [
+        "You clearly know how to collect humans.",
+        "Your social graph is thriving.",
+        "Impressive network, mastermind.",
+        "Either you're popular or very persuasive.",
+        "Discord servers fear your influence.",
+        "A suspiciously strong friend economy.",
+        "Your aura is apparently invite-shaped.",
+        "This is respectable digital charisma."
+    ];
+
+    const roastMessages = [
+        "This many Discord relationships? The outdoors miss you.",
+        "Your monitor has seen more of you than the sun has.",
+        "You are one unread ping away from becoming pure electricity.",
+        "This is not a friend list. This is a low-orbit satellite grid.",
+        "You built a social empire in an app with cartoon noises.",
+        "Frankly, your router deserves employee benefits.",
+        "The grass filed a restraining order.",
+        "You are 40% notification at this point.",
+        "Even the typing indicator fears your presence.",
+        "Your desktop probably opens Discord before your own thoughts do."
+    ];
+
+    function randomFrom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function generateAnalysis(stats, roastMode) {
+        if (!stats) return "Could not locate Discord relationship data.";
+        return roastMode ? randomFrom(roastMessages) : randomFrom(niceMessages);
+    }
+
+    const html = `
+    <div id="${WINDOW_ID}">
+        <div id="dsaHeader">
+            <div>
+                <div id="dsaTitle">Discord Social Analyzer</div>
+                <div id="dsaSubtitle">totally scientific social metrics</div>
+            </div>
+            <div id="dsaClose" aria-label="Close" role="button" tabindex="0">
+                <svg aria-hidden="true" role="img" width="18" height="18" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M18.4 4L12 10.4L5.6 4L4 5.6L10.4 12L4 18.4L5.6 20L12 13.6L18.4 20L20 18.4L13.6 12L20 5.6L18.4 4Z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="dsaBody">
+            <div class="dsaCard">
+                <div class="dsaLabel">Current User</div>
+                <div class="dsaValue" id="dsaUsername">Loading...</div>
+            </div>
+
+            <div class="dsaGrid">
+                <div class="dsaCard">
+                    <div class="dsaLabel">Friend Count</div>
+                    <div class="dsaValue big green" id="dsaFriends">...</div>
+                </div>
+
+                <div class="dsaCard">
+                    <div class="dsaLabel">Blocked Users</div>
+                    <div class="dsaValue big red" id="dsaBlocked">...</div>
+                </div>
+
+                <div class="dsaCard">
+                    <div class="dsaLabel">Incoming Requests</div>
+                    <div class="dsaValue big yellow" id="dsaIncoming">...</div>
+                </div>
+
+                <div class="dsaCard">
+                    <div class="dsaLabel">Outgoing Requests</div>
+                    <div class="dsaValue big blue" id="dsaOutgoing">...</div>
+                </div>
+            </div>
+
+            <div class="dsaCard">
+                <div class="dsaLabel">Social Rank</div>
+                <div class="dsaValue" id="dsaRank">Calculating...</div>
+            </div>
+
+            <div class="dsaCard">
+                <div class="dsaLabel">Touch Grass Meter</div>
+                <div class="dsaText" id="dsaGrass">Scanning vegetation...</div>
+            </div>
+
+            <div class="dsaCard">
+                <div class="dsaLabel">Analysis</div>
+                <div class="dsaText" id="dsaAnalysis">Running extremely serious math...</div>
+            </div>
+
+            <div class="dsaToggleRow">
+                <label class="dsaToggle">
+                    <input type="checkbox" id="dsaRoastMode">
+                    <span>Roast Mode</span>
+                </label>
+            </div>
+
+            <div class="dsaButtonRow">
+                <button id="dsaRefresh">Refresh Stats</button>
+                <button id="dsaNewLine">New Message</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const css = `
+    #${WINDOW_ID} {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 420px;
+        background: #2b2d31;
+        color: #f2f3f5;
+        border-radius: 16px;
+        box-shadow: 0 20px 55px rgba(0,0,0,0.48);
+        z-index: 999999;
+        font-family: Inter, system-ui, sans-serif;
+        user-select: none;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    #dsaHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        background: linear-gradient(135deg, #5865F2, #4752c4);
+        cursor: move;
+    }
+
+    #dsaTitle {
+        font-size: 19px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    #dsaSubtitle {
+        font-size: 12px;
+        opacity: 0.92;
+        margin-top: 2px;
+    }
+
+    #dsaClose {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    #dsaClose:hover {
+        background: rgba(255,255,255,0.12);
+    }
+
+    .dsaBody {
+        padding: 14px;
+    }
+
+    .dsaGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .dsaCard {
+        background: #1e1f22;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .dsaLabel {
+        font-size: 12px;
+        color: #b5bac1;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .dsaValue {
+        font-size: 16px;
+        font-weight: 600;
+        color: #ffffff;
+        word-break: break-word;
+    }
+
+    .dsaValue.big {
+        font-size: 28px;
+        line-height: 1.1;
+    }
+
+    .green { color: #57F287; }
+    .red { color: #ED4245; }
+    .yellow { color: #FEE75C; }
+    .blue { color: #5DADEC; }
+
+    .dsaText {
+        font-size: 14px;
+        line-height: 1.45;
+        color: #dbdee1;
+    }
+
+    .dsaToggleRow {
+        margin: 4px 0 12px 0;
+    }
+
+    .dsaToggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #1e1f22;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 14px;
+        color: #f2f3f5;
+    }
+
+    .dsaToggle input {
+        width: 16px;
+        height: 16px;
+        accent-color: #5865F2;
+        cursor: pointer;
+    }
+
+    .dsaButtonRow {
+        display: flex;
+        gap: 10px;
+    }
+
+    .dsaButtonRow button {
+        flex: 1;
+        background: #5865F2;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.08s ease, background 0.15s ease;
+    }
+
+    .dsaButtonRow button:hover {
+        background: #4752c4;
+    }
+
+    .dsaButtonRow button:active {
+        transform: scale(0.98);
+    }
+    `;
+
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper.firstElementChild);
+
+    const win = document.getElementById(WINDOW_ID);
+    const header = document.getElementById("dsaHeader");
+    const closeBtn = document.getElementById("dsaClose");
+
+    const usernameEl = document.getElementById("dsaUsername");
+    const friendsEl = document.getElementById("dsaFriends");
+    const blockedEl = document.getElementById("dsaBlocked");
+    const incomingEl = document.getElementById("dsaIncoming");
+    const outgoingEl = document.getElementById("dsaOutgoing");
+    const rankEl = document.getElementById("dsaRank");
+    const grassEl = document.getElementById("dsaGrass");
+    const analysisEl = document.getElementById("dsaAnalysis");
+    const roastModeEl = document.getElementById("dsaRoastMode");
+    const refreshBtn = document.getElementById("dsaRefresh");
+    const newLineBtn = document.getElementById("dsaNewLine");
+
+    function updateUI(newAnalysis = true) {
+        const username = getCurrentUsername();
+        const stats = getRelationshipBreakdown();
+
+        usernameEl.textContent = username;
+
+        if (!stats) {
+            friendsEl.textContent = "N/A";
+            blockedEl.textContent = "N/A";
+            incomingEl.textContent = "N/A";
+            outgoingEl.textContent = "N/A";
+            rankEl.textContent = "Unknown Specimen";
+            grassEl.textContent = "Could not detect nearby plant life.";
+            if (newAnalysis) analysisEl.textContent = "Could not locate Discord relationship data.";
+            return;
+        }
+
+        friendsEl.textContent = stats.friends;
+        blockedEl.textContent = stats.blocked;
+        incomingEl.textContent = stats.incoming;
+        outgoingEl.textContent = stats.outgoing;
+        rankEl.textContent = getSocialRank(stats.friends);
+        grassEl.textContent = getTouchGrassMeter(stats.friends);
+
+        if (newAnalysis) {
+            analysisEl.textContent = generateAnalysis(stats, roastModeEl.checked);
+        }
+    }
+
+    refreshBtn.addEventListener("click", () => updateUI(true));
+
+    newLineBtn.addEventListener("click", () => {
+        const stats = getRelationshipBreakdown();
+        analysisEl.textContent = generateAnalysis(stats, roastModeEl.checked);
+    });
+
+    roastModeEl.addEventListener("change", () => {
+        const stats = getRelationshipBreakdown();
+        analysisEl.textContent = generateAnalysis(stats, roastModeEl.checked);
+    });
+
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    function onMouseMove(e) {
+        if (!dragging) return;
+        win.style.left = `${e.clientX - offsetX}px`;
+        win.style.top = `${e.clientY - offsetY}px`;
+    }
+
+    function onMouseUp() {
+        dragging = false;
+    }
+
+    header.addEventListener("mousedown", (e) => {
+        dragging = true;
+        offsetX = e.clientX - win.offsetLeft;
+        offsetY = e.clientY - win.offsetTop;
+    });
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+
+    function cleanup() {
+        win.remove();
+        document.getElementById(STYLE_ID)?.remove();
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+    }
+
+    closeBtn.addEventListener("click", cleanup);
+    closeBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            cleanup();
+        }
+    });
+
+    updateUI(true);
+
+    console.log("%cDiscord Social Analyzer loaded", "color: #57F287; font-size: 16px;");
+    console.log("RelationshipStore:", RelationshipStore);
+    console.log("UserStore:", UserStore);
+})();
